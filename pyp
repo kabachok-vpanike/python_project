@@ -1,6 +1,7 @@
 import sqlite3
 
 import telebot
+import telegram as telegram
 from telebot import types
 
 token = '2119785947:AAGrAj1dQgJh2VOC8WN4yHGLK5mk_L_mLJ4'
@@ -8,6 +9,11 @@ bot = telebot.TeleBot(token)
 
 global global_markup
 global keyboard_now
+global message_with_button_id
+global user_id_now
+global ind_of_match
+global id_of_inline_keyboard
+global array_of_matching
 
 
 @bot.message_handler(commands=['start'])
@@ -26,7 +32,28 @@ def user_message(message):
 
 
 tag_buttons = ["Фильмы, Сериалы", "Спорт", "Здоровье и диета", "Путешествия", "Животные", "Музыка", "Видеоигры"]
-emoji_buttons = ["🎥 Фильмы, Сериалы", "🏃 Спорт", "🍰 Здоровье и диета", "✈ Путешествия", "🐱 Животные", "🎶 Музыка", "💻 Видеоигры"]
+emoji_buttons = ["🎥 Фильмы, Сериалы", "🏃 Спорт", "🍰 Здоровье и диета", "✈ Путешествия", "🐱 Животные", "🎶 Музыка",
+                 "💻 Видеоигры"]
+
+
+def is_register(user_id):
+    sqlite_connection = sqlite3.connect('prprpr.db')
+    cursor = sqlite_connection.cursor()
+    data = cursor.execute('''SELECT * FROM USER_DATA''')
+    t = False
+    for column in data:
+        # print(column[1])
+        if column[1] == str(user_id):
+            t = True
+    return t
+
+
+def give_user_bio(chat_id):
+    sqlite_connection = sqlite3.connect('prprpr.db')
+    cursor = sqlite_connection.cursor()
+    data = cursor.execute("""SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(chat_id)).fetchone()
+    sqlite_connection.close()
+    return data[2]
 
 
 def register(message):
@@ -61,11 +88,51 @@ def register(message):
 
 @bot.message_handler(content_types='text')
 def message_reply(message):
+    global tag_buttons
+    global global_markup
+    global keyboard_now
+    if message.text == "Перейти к просмотру анкет":
+        if not (is_register(message.chat.id)):
+            bot.send_message(message.chat.id, 'Зарегистрируйтесь, чтобы смотреть анкеты!')
+        else:
+            sqlite_connection = sqlite3.connect('prprpr.db')
+            cursor = sqlite_connection.cursor()
+            data = cursor.execute("""SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(message.chat.id)).fetchone()
+            data = list(data)
+            data = data[3][1:].split('#')
+            # print(data[3][1:].split('#'))
+            keyboard_now = telebot.types.InlineKeyboardMarkup(row_width=3)
+            keyboard_now.row(telebot.types.InlineKeyboardButton('⬅', callback_data='prev'),
+                             telebot.types.InlineKeyboardButton('❤️', callback_data='send_match'),
+                             telebot.types.InlineKeyboardButton('➡️', callback_data='next'))
+            # keyboard_now.add()
+            # keyboard_now.add()
+
+            can_edit = False
+            # for user in data:
+            #   print(user, give_user_bio(user))
+            global user_id_now
+            global ind_of_match
+            global id_of_inline_keyboard
+            global array_of_matching
+            array_of_matching = data
+            user_id_now = data[0]
+            ind_of_match = 0
+            id_of_inline_keyboard = message.message_id + 1
+            bot.send_message(message.chat.id, give_user_bio(data[0]), reply_markup=keyboard_now)
+            # for column in data:
+            #   if column[1] != str(message.chat.id):
+            #  if can_edit:
+            #     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id + 1,
+            #                          text=column[2],
+            #                         reply_markup=keyboard_now)
+            # else:
+            #   bot.send_message(message.chat.id, column[2], reply_markup=keyboard_now)
+            #  can_edit = True
+
     if message.text == "Зарегистрироваться":
         if register(message):
-            global tag_buttons
-            global global_markup
-            global keyboard_now
+
             # bot.send_message(message.chat.id, 'Выберите наиболее интересные для вас темы:')
             keyboard_now = telebot.types.InlineKeyboardMarkup()
             for butt in tag_buttons:
@@ -75,6 +142,7 @@ def message_reply(message):
             global_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
             item1 = types.KeyboardButton("Выбрал!")
             global_markup.add(item1)
+
             bot.send_message(message.chat.id, 'Вы зарегистрировались!', reply_markup=global_markup)
 
             bot.send_message(message.chat.id, text="Выберите наиболее интересные для вас темы:",
@@ -83,14 +151,62 @@ def message_reply(message):
             bot.send_message(message.chat.id, 'Вы уже зарегистрированы!')
 
     if message.text == "Выбрал!":
+        sqlite_connection = sqlite3.connect('prprpr.db')
+        cursor = sqlite_connection.cursor()
+        t = cursor.execute("""SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(str(message.chat.id)))
+        person = t.fetchone()
+        q = cursor.execute("""SELECT * FROM USER_DATA""")
+        matching = ""
+        for i in q:
+            if i[1] != person[1]:
+                matching += '#' + str(i[1])
+        cursor.execute(
+            """UPDATE USER_DATA SET MATCHING = '{}' WHERE CHAT_ID = '{}'""".format(matching, str(person[1])))
+        sqlite_connection.commit()
+        cursor.close()
+
+        # global message_with_button_id
+        # message_with_button_id = message.message_id
         markup = telebot.types.InlineKeyboardMarkup()
+        rem = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        fake_b = types.KeyboardButton("")
+        rem.add(fake_b)
         bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=message.message_id - 1, reply_markup='')
-        bot.send_message(chat_id=message.chat.id, text='Замечательно!')
-        #markup = telebot.types.InlineKeyboardMarkup()
-        #bot.send_message(chat_id=message.chat.id, text='Напишите, немного о себе:')
-        
-        #markup.add(telebot.types.InlineKeyboardButton(text="butt" + "✅", callback_data=butt))
-        #bot.edit_message_reply_markup(chat_id=message.chat.id, text='Выб')
+        # global global_markup
+        global_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        item1 = types.KeyboardButton("Выход")
+        global_markup.add(item1)
+        bot.send_message(chat_id=message.chat.id, text='Замечательно!', reply_markup=global_markup)
+        markup = telebot.types.InlineKeyboardMarkup()
+        sent = bot.send_message(chat_id=message.chat.id, text='Напишите, немного о себе:',
+                                reply_markup='')
+        bot.register_next_step_handler(sent, user_bio)
+        # global global_markup
+
+        # bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=message.message_id - 1,
+        #                        reply_markup=global_markup)
+        # bot.edit_message_text("Ха", message.chat.id, message.message_id)
+
+        # markup.add(telebot.types.InlineKeyboardButton(text="butt" + "✅", callback_data=butt))
+        # bot.edit_message_reply_markup(chat_id=message.chat.id, text='Выб')
+
+
+def user_bio(message):
+    sqlite_connection = sqlite3.connect('prprpr.db')
+    cursor = sqlite_connection.cursor()
+    t = cursor.execute("""SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(message.chat.id))
+    for q in t:
+        cursor.execute(
+            """UPDATE USER_DATA SET USER_BIO = '{}' WHERE CHAT_ID = '{}'""".format(message.text, q[1]))
+        sqlite_connection.commit()
+
+    global global_markup
+    # global_markup.add(types.KeyboardButton("Выход"))
+    global_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    item1 = types.KeyboardButton("Перейти к просмотру анкет")
+    global_markup.add(item1)
+    bot.send_message(chat_id=message.chat.id, text='Превосходно!', reply_markup=global_markup)
+    # bot.send_message(chat_id=message.chat.id, text='Посм!')
 
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -99,44 +215,57 @@ def query_handler(call):
     # answer = 'You made a mistake'
     # if call.data == '4':
     #    answer = 'You answered correctly!'
-    sqlite_connection = sqlite3.connect('prprpr.db')
-    cursor = sqlite_connection.cursor()
-    t = cursor.execute("""SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(call.message.chat.id))
-    user_tags = ""
+    if call.data == 'next' or call.data == 'prev':
+        global id_of_inline_keyboard
+        global ind_of_match
+        global array_of_matching
+        if call.data == 'next':
+            ind_of_match = (ind_of_match + 1) % len(array_of_matching)
+        if call.data == 'prev':
+            ind_of_match = (ind_of_match - 1) % len(array_of_matching)
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=id_of_inline_keyboard,
+                              text=give_user_bio(array_of_matching[ind_of_match]),
+                              reply_markup=keyboard_now)
+
     global tag_buttons
-    for q in t:
-        user_tags = q[0]
-        if call.data not in q[0]:
-            cursor.execute(
-                """UPDATE USER_DATA SET TAGS = '{}' WHERE CHAT_ID = '{}'""".format(q[0] + '#' + call.data, q[1]))
-            sqlite_connection.commit()
-            # user_tags = q[0] + call.data
-            # bot.send_message(message.chat.id, 'Выберите наиболее интересные для вас темы:')
-    markup = telebot.types.InlineKeyboardMarkup()
-
-    for butt in tag_buttons:
-        if butt in user_tags:
-            if butt == call.data:
-                markup.add(telebot.types.InlineKeyboardButton(text=butt, callback_data=butt))
+    if call.data in tag_buttons:
+        sqlite_connection = sqlite3.connect('prprpr.db')
+        cursor = sqlite_connection.cursor()
+        t = cursor.execute("""SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(call.message.chat.id))
+        user_tags = ""
+        for q in t:
+            user_tags = q[0]
+            if call.data not in q[0]:
                 cursor.execute(
-                    """UPDATE USER_DATA SET TAGS = '{}' WHERE CHAT_ID = '{}'""".format(
-                        user_tags.replace('#' + butt, ''), call.message.chat.id))
+                    """UPDATE USER_DATA SET TAGS = '{}' WHERE CHAT_ID = '{}'""".format(q[0] + '#' + call.data, q[1]))
                 sqlite_connection.commit()
-            else:
-                markup.add(telebot.types.InlineKeyboardButton(text=butt + "✅", callback_data=butt))
-        else:
-            if butt == call.data:
-                markup.add(telebot.types.InlineKeyboardButton(text=butt + "✅", callback_data=butt))
-            else:
-                markup.add(telebot.types.InlineKeyboardButton(text=butt, callback_data=butt))
+                # user_tags = q[0] + call.data
+                # bot.send_message(message.chat.id, 'Выберите наиболее интересные для вас темы:')
+        markup = telebot.types.InlineKeyboardMarkup()
 
-    cursor.close()
-    # print(q[0], q[1])
+        for butt in tag_buttons:
+            if butt in user_tags:
+                if butt == call.data:
+                    markup.add(telebot.types.InlineKeyboardButton(text=butt, callback_data=butt))
+                    cursor.execute(
+                        """UPDATE USER_DATA SET TAGS = '{}' WHERE CHAT_ID = '{}'""".format(
+                            user_tags.replace('#' + butt, ''), call.message.chat.id))
+                    sqlite_connection.commit()
+                else:
+                    markup.add(telebot.types.InlineKeyboardButton(text=butt + "✅", callback_data=butt))
+            else:
+                if butt == call.data:
+                    markup.add(telebot.types.InlineKeyboardButton(text=butt + "✅", callback_data=butt))
+                else:
+                    markup.add(telebot.types.InlineKeyboardButton(text=butt, callback_data=butt))
 
-    # bot.send_message(call.message.chat.id, answer)
-    # call.message.edit_message_text("new text")
-    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                          text=f"Выберите наиболее интересные для вас темы:", reply_markup=markup)
+        cursor.close()
+        # print(q[0], q[1])
+
+        # bot.send_message(call.message.chat.id, answer)
+        # call.message.edit_message_text("new text")
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                              text=f"Выберите наиболее интересные для вас темы:", reply_markup=markup)
 
 
 bot.polling(True)
