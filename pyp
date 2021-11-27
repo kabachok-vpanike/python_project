@@ -15,6 +15,7 @@ global id_of_inline_keyboard
 global array_of_matching
 global array_of_invites
 
+ind_of_match = 0
 
 @bot.message_handler(commands=['start'])
 def start_message(message):
@@ -99,7 +100,7 @@ def message_reply(message):
     global global_markup
     global keyboard_now
     global id_of_inline_keyboard
-
+    global ids_of_hearts
     if message.text == "Посмотреть мои мэтчи":
         global_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         item1 = types.KeyboardButton("Перейти к просмотру анкет")
@@ -112,15 +113,20 @@ def message_reply(message):
         if data[4] is None:
             bot.send_message(message.chat.id, "Нет мэтчей")
         else:
+
             ids_of_hearts = data[4][1:].split('#')
-            ind_of_heart = 0
-            keyboard_now = telebot.types.InlineKeyboardMarkup(row_width=1)
-            global array_of_invites
-            for i in ids_of_hearts:
-                keyboard_now.add(
-                    telebot.types.InlineKeyboardButton(str(give_user_name(i)), callback_data='heart_' + str(i)))
-                ind_of_heart += 1
-            bot.send_message(chat_id=message.chat.id, text='Вас приглашают на кофе:', reply_markup=keyboard_now)
+            if len(ids_of_hearts) > 0 and ids_of_hearts[0] == '':
+                bot.send_message(message.chat.id, "Нет мэтчей")
+            else:
+                ind_of_heart = 0
+                keyboard_now = telebot.types.InlineKeyboardMarkup(row_width=1)
+                global array_of_invites
+                #print(ids_of_hearts)
+                for i in ids_of_hearts:
+                    keyboard_now.add(
+                        telebot.types.InlineKeyboardButton(str(give_user_name(i)), callback_data='heart_' + str(i)))
+                    ind_of_heart += 1
+                bot.send_message(chat_id=message.chat.id, text='Вас приглашают на кофе:', reply_markup=keyboard_now)
 
     if message.text == "Перейти к просмотру анкет":
         if not (is_register(message.chat.id)):
@@ -224,7 +230,8 @@ def user_bio(message):
     global_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     item1 = types.KeyboardButton("Перейти к просмотру анкет")
     global_markup.add(item1)
-    bot.send_message(chat_id=message.chat.id, text='Превосходно!', reply_markup=global_markup)
+    bot.send_message(chat_id=message.chat.id, text='Превосходно! Вам доступен просмотр анкет',
+                     reply_markup=global_markup)
 
 
 def define_array_of_matching(message):
@@ -241,19 +248,45 @@ def query_handler(call):
     global array_of_matching
     global id_of_inline_keyboard
     global keyboard_now
+    #global ids_of_hearts
+    if 'agreement' in call.data:
+        bot.answer_callback_query(callback_query_id=call.id, text="Ура! Вам доступен хендл пользователя для связи", show_alert=False)
+    if 'dismatch' in call.data:
+        bot.answer_callback_query(callback_query_id=call.id, text="Ничего страшного, можете поискать ещё", show_alert=False)
+        sqlite_connection = sqlite3.connect('prprpr.db')
+        cursor = sqlite_connection.cursor()
+        data = cursor.execute(
+            """SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(call.message.chat.id)).fetchone()
+        edited_hearts = data[4].replace('#' + call.data[8:], "")
+        data = cursor.execute("""UPDATE USER_DATA SET USER_HEARTS = '{}' WHERE CHAT_ID = '{}'""".format(
+                    edited_hearts, call.message.chat.id))
+        sqlite_connection.commit()
     if call.data == 'back_to_matches':
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=id_of_inline_keyboard,
+
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                               text="Вас приглашают на кофе:")
-        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=id_of_inline_keyboard,
-                                      reply_markup=keyboard_now)
+        sqlite_connection = sqlite3.connect('prprpr.db')
+        cursor = sqlite_connection.cursor()
+        data = cursor.execute("""SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(call.message.chat.id)).fetchone()
+
+        keyboard_now = telebot.types.InlineKeyboardMarkup(row_width=2)
+        ids_of_hearts = data[4][1:].split('#')
+        if len(ids_of_hearts) > 0 and ids_of_hearts[0] == '':
+            bot.send_message(chat_id=call.message.chat.id, text="Нет новых мэтчей")
+        else:
+            for i in ids_of_hearts:
+                keyboard_now.add(
+                    telebot.types.InlineKeyboardButton(str(give_user_name(i)), callback_data='heart_' + str(i)))
+            bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                          reply_markup=keyboard_now)
     if 'heart_' in call.data:
         keyb = telebot.types.InlineKeyboardMarkup()
-        keyb.row(telebot.types.InlineKeyboardButton("👍", callback_data='agreement'),
-                 telebot.types.InlineKeyboardButton("👎", callback_data='dismatch'))
+        keyb.row(telebot.types.InlineKeyboardButton("👍", callback_data='agreement' + str(call.data[6:])),
+                 telebot.types.InlineKeyboardButton("👎", callback_data='dismatch' + str(call.data[6:])))
         keyb.add(telebot.types.InlineKeyboardButton("⬅", callback_data='back_to_matches'))
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=id_of_inline_keyboard,
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                               text=give_user_name(call.data[6:]) + '\n' + give_user_bio(call.data[6:]))
-        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=id_of_inline_keyboard,
+        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id,
                                       reply_markup=keyb)
         id_of_inline_keyboard = call.message.message_id
 
@@ -275,7 +308,7 @@ def query_handler(call):
         keyb.row(telebot.types.InlineKeyboardButton('⬅', callback_data='prev'),
                  telebot.types.InlineKeyboardButton('❌', callback_data='cancel'),
                  telebot.types.InlineKeyboardButton('➡️', callback_data='next'))
-        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=id_of_inline_keyboard,
+        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id,
                                       reply_markup=keyb)
         t = cursor.execute(
             """SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(array_of_matching[ind_of_match])).fetchone()
