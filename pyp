@@ -17,6 +17,7 @@ global array_of_invites
 
 ind_of_match = 0
 
+
 @bot.message_handler(commands=['start'])
 def start_message(message):
     global global_markup
@@ -121,7 +122,7 @@ def message_reply(message):
                 ind_of_heart = 0
                 keyboard_now = telebot.types.InlineKeyboardMarkup(row_width=1)
                 global array_of_invites
-                #print(ids_of_hearts)
+                # print(ids_of_hearts)
                 for i in ids_of_hearts:
                     keyboard_now.add(
                         telebot.types.InlineKeyboardButton(str(give_user_name(i)), callback_data='heart_' + str(i)))
@@ -248,18 +249,20 @@ def query_handler(call):
     global array_of_matching
     global id_of_inline_keyboard
     global keyboard_now
-    #global ids_of_hearts
+    # global ids_of_hearts
     if 'agreement' in call.data:
-        bot.answer_callback_query(callback_query_id=call.id, text="Ура! Вам доступен хендл пользователя для связи", show_alert=False)
+        bot.answer_callback_query(callback_query_id=call.id, text="Ура! Вам доступен хендл пользователя для связи",
+                                  show_alert=False)
     if 'dismatch' in call.data:
-        bot.answer_callback_query(callback_query_id=call.id, text="Ничего страшного, можете поискать ещё", show_alert=False)
+        bot.answer_callback_query(callback_query_id=call.id, text="Ничего страшного, можете поискать ещё",
+                                  show_alert=False)
         sqlite_connection = sqlite3.connect('prprpr.db')
         cursor = sqlite_connection.cursor()
         data = cursor.execute(
             """SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(call.message.chat.id)).fetchone()
         edited_hearts = data[4].replace('#' + call.data[8:], "")
         data = cursor.execute("""UPDATE USER_DATA SET USER_HEARTS = '{}' WHERE CHAT_ID = '{}'""".format(
-                    edited_hearts, call.message.chat.id))
+            edited_hearts, call.message.chat.id))
         sqlite_connection.commit()
     if call.data == 'back_to_matches':
 
@@ -267,7 +270,8 @@ def query_handler(call):
                               text="Вас приглашают на кофе:")
         sqlite_connection = sqlite3.connect('prprpr.db')
         cursor = sqlite_connection.cursor()
-        data = cursor.execute("""SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(call.message.chat.id)).fetchone()
+        data = cursor.execute(
+            """SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(call.message.chat.id)).fetchone()
 
         keyboard_now = telebot.types.InlineKeyboardMarkup(row_width=2)
         ids_of_hearts = data[4][1:].split('#')
