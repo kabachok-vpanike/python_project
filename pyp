@@ -2,6 +2,8 @@ import sqlite3
 
 import telebot
 from telebot import types
+from random import randint
+from datetime import datetime
 
 token = '2119785947:AAGrAj1dQgJh2VOC8WN4yHGLK5mk_L_mLJ4'
 bot = telebot.TeleBot(token)
@@ -49,6 +51,12 @@ def is_register(user_id):
     return t
 
 
+def give_random_user(message):
+    global array_of_matching
+    array_of_matching = define_array_of_matching(message)
+    return array_of_matching[randint(0, len(array_of_matching) - 1)]
+
+
 def give_user_bio(chat_id):
     sqlite_connection = sqlite3.connect('prprpr.db')
     cursor = sqlite_connection.cursor()
@@ -70,6 +78,43 @@ def is_this_confirmed_match(user_id_1, user_id_2):
     cursor = sqlite_connection.cursor()
     data = cursor.execute("""SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(user_id_1)).fetchone()
     return user_id_2 in data[6]
+
+
+def assign_coffee_data(id_of_user):
+    sqlite_connection = sqlite3.connect('prprpr.db')
+    cursor = sqlite_connection.cursor()
+    cur_date = datetime.now()
+    current_ddmm = str(cur_date.day) + '.' + str(cur_date.month)
+    cursor.execute(
+        """UPDATE USER_DATA SET LAST_COFFEE_DATE = '{}' WHERE CHAT_ID = '{}'""".format(current_ddmm, id_of_user))
+    sqlite_connection.commit()
+
+
+def assign_coffee_id(id_of_user, id_of_coffee):
+    sqlite_connection = sqlite3.connect('prprpr.db')
+    cursor = sqlite_connection.cursor()
+    cursor.execute(
+        """UPDATE USER_DATA SET THIS_WEEK_ID = '{}' WHERE CHAT_ID = '{}'""".format(id_of_coffee, id_of_user))
+    sqlite_connection.commit()
+
+
+def check_if_week_passed(id_of_user):
+    sqlite_connection = sqlite3.connect('prprpr.db')
+    cursor = sqlite_connection.cursor()
+    data = cursor.execute("""SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(id_of_user)).fetchone()
+    if data[7] is None:
+        return True
+    cur_date = datetime.now()
+    date1 = datetime.strptime(str(cur_date.day) + '.' + str(cur_date.month), "%d.%m")
+    date2 = datetime.strptime(data[7], "%d.%m")
+    return abs((date1 - date2).days) >= 7
+
+
+def give_coffee_id(id_of_user):
+    sqlite_connection = sqlite3.connect('prprpr.db')
+    cursor = sqlite_connection.cursor()
+    data = cursor.execute("""SELECT * FROM USER_DATA WHERE CHAT_ID = '{}'""".format(id_of_user)).fetchone()
+    return data[8]
 
 
 def register(message):
@@ -102,10 +147,26 @@ def message_reply(message):
     global keyboard_now
     global id_of_inline_keyboard
     global ids_of_hearts
+    if message.text == "Найти случайный кофе":
+        if check_if_week_passed(message.chat.id):
+            bot.send_message(chat_id=message.chat.id, text="Ваш случайный кофе на эту неделю:")
+            id_of_random_user = give_random_user(message)
+
+            bot.send_message(chat_id=message.chat.id,
+                             text=str(give_user_name(id_of_random_user)) + "\n" + str(give_user_bio(id_of_random_user)))
+            assign_coffee_data(message.chat.id)
+            assign_coffee_id(message.chat.id, id_of_random_user)
+        else:
+            bot.send_message(chat_id=message.chat.id, text="У вас уже есть кофе на эту неделю:")
+            id_of_coffee = give_coffee_id(message.chat.id)
+            bot.send_message(chat_id=message.chat.id,
+                             text=give_user_name(id_of_coffee) + "\n" + give_user_bio(id_of_coffee))
     if message.text == "Посмотреть мои мэтчи":
         global_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         item1 = types.KeyboardButton("Перейти к просмотру анкет")
+        item2 = types.KeyboardButton("Найти случайный кофе")
         global_markup.add(item1)
+        global_markup.add(item2)
         id_of_inline_keyboard = message.message_id + 2
         bot.send_message(chat_id=message.chat.id, text='Загружаем ваши мэтчи..', reply_markup=global_markup)
         sqlite_connection = sqlite3.connect('prprpr.db')
@@ -144,7 +205,9 @@ def message_reply(message):
                              telebot.types.InlineKeyboardButton('➡️', callback_data='next'))
             global_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
             item1 = types.KeyboardButton("Посмотреть мои мэтчи")
+            item2 = types.KeyboardButton("Найти случайный кофе")
             global_markup.add(item1)
+            global_markup.add(item2)
             bot.send_message(chat_id=message.chat.id, text='Загружаем анкеты..', reply_markup=global_markup)
 
             can_edit = False
@@ -152,11 +215,11 @@ def message_reply(message):
             global ind_of_match
             global array_of_matching
             array_of_matching = data
-            user_id_now = data[0]
+            user_id_now = data[0]  # data[0]
             ind_of_match = 0
             id_of_inline_keyboard = message.message_id + 2
             bot.send_message(message.chat.id, give_user_name(data[0]) + '\n' + give_user_bio(data[0]),
-                             reply_markup=keyboard_now)
+                             reply_markup=keyboard_now)  # data[0]
 
     if message.text == "Зарегистрироваться":
         if register(message):
@@ -230,7 +293,9 @@ def user_bio(message):
     global global_markup
     global_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     item1 = types.KeyboardButton("Перейти к просмотру анкет")
+    item2 = types.KeyboardButton("Найти случайный кофе")
     global_markup.add(item1)
+    global_markup.add(item2)
     bot.send_message(chat_id=message.chat.id, text='Превосходно! Вам доступен просмотр анкет',
                      reply_markup=global_markup)
 
@@ -339,7 +404,7 @@ def query_handler(call):
         keyb.row(telebot.types.InlineKeyboardButton('⬅', callback_data='prev'),
                  telebot.types.InlineKeyboardButton('☕', callback_data='send_match'),
                  telebot.types.InlineKeyboardButton('➡️', callback_data='next'))
-        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=id_of_inline_keyboard,
+        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.chat.id,
                                       reply_markup=keyb)
     if call.data == 'next' or call.data == 'prev':
         array_of_matching = define_array_of_matching(call.message)
@@ -347,10 +412,14 @@ def query_handler(call):
             ind_of_match = (ind_of_match + 1) % len(array_of_matching)
         if call.data == 'prev':
             ind_of_match = (ind_of_match - 1) % len(array_of_matching)
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=id_of_inline_keyboard,
+        keyb = telebot.types.InlineKeyboardMarkup(row_width=3)
+        keyb.row(telebot.types.InlineKeyboardButton('⬅', callback_data='prev'),
+                 telebot.types.InlineKeyboardButton('☕', callback_data='send_match'),
+                 telebot.types.InlineKeyboardButton('➡️', callback_data='next'))
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                               text=give_user_name(array_of_matching[ind_of_match]) + '\n' + give_user_bio(
                                   array_of_matching[ind_of_match]),
-                              reply_markup=keyboard_now)
+                              reply_markup=keyb)
 
     global tag_buttons
     if call.data in tag_buttons:
